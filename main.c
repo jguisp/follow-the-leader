@@ -1,7 +1,7 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#include "uart.h"
+#include "uart/uart.h"
 
 void repeat_char() {
     volatile char ch;

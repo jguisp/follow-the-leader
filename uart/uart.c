@@ -2,8 +2,9 @@
 #include <avr/interrupt.h>
 #include <stdio.h>
 
+#include "circular_buffer/circular_buffer.h"
 #include "uart.h"
-#include "circular_buffer.h"
+
 
 ///////////////////////////////
 // defines
