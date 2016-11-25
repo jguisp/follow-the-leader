@@ -1,5 +1,6 @@
-#include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/io.h>
+#include <avr/wdt.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -15,6 +16,14 @@
 #define MAX_NUM_PLAYERS		9
 #define DBG 				0
 
+
+///////////////////////////////
+// PINS
+///////////////////////////////
+volatile char* DDRd = (char*)0x02A;
+volatile char* PORTd = (char*)0x02B;
+volatile char* PINd = (char*)0x029;
+
 ///////////////////////////////
 // variables
 ///////////////////////////////
@@ -28,6 +37,84 @@ int timeout;
 
 int players[MAX_NUM_PLAYERS];
 char notes_sequence[MAX_NUMBER_NOTES];
+
+volatile char watchdog_counter = 0;
+
+
+///////////////////////////////
+// Buttons setup
+//
+// Button 1:
+//   5v  - 5v pin
+//   GND - GND pin
+//   Out - PIN2 (INT0)
+//
+// Button 2:
+//   5v  - pin7
+//   GND - GND pin
+//   Out - PIN3 (INT1)
+//
+///////////////////////////////
+void setup_buttons() {
+    *DDRd &= ~(1 << DDD2);         // pin2 as input
+    EICRA |= (1 << ISC01);         // set INT0 to trigger
+    EIMSK |= (1 << INT0);          // Turns on INT0
+
+    *DDRd &= ~(1 << DDD3);         // pin3 as input
+    EICRA |= (1 << ISC11);         // set INT1 to trigger
+    EIMSK |= (1 << INT1);          // Turns on INT1
+
+    *DDRd |= (1 << PORTD7);        // pin7 as output
+    *PORTd |= (1 << PORTD7);       // pin7 to send 5V to button2
+
+    sei();
+}
+
+ISR (INT0_vect)
+{
+    printf("Interruption Button 1\n");
+}
+
+ISR (INT1_vect)
+{
+    printf("Interruption Button 2\n");
+}
+
+///////////////////////////////
+// Watchdog setup
+// Watchdog will be used to count time to user press button (5s).
+// As we don't have a prescaler, we count 5 watchdog interruptions of 1s.
+///////////////////////////////
+
+//initialize watchdog
+void WDT_Init(void) {
+    //disable interrupts
+    cli();
+
+    //reset watchdog
+    wdt_reset();
+
+    //set up WDT interrupt
+    WDTCSR |= (1<<WDCE) | (1 << WDE);
+
+    // Set Watchdog settings: prescaler 1s and no reset
+    WDTCSR = (1<<WDIE) | (0<<WDP3) | (1<<WDP2) | (1<<WDP1) | (0<<WDP0);
+}
+
+//Watchdog timeout ISR
+ISR(WDT_vect) {
+    printf("Watch Dog Timer\n");
+    if (watchdog_counter == 4) {
+        // current player lost
+        watchdog_counter = 0;
+        wdt_disable();
+        printf("Watch Dog Timer - TIMEOUT\n");
+    } else {
+        watchdog_counter++;
+        printf("Watch Dog Timer - time %d \n", watchdog_counter);
+	wdt_reset();
+    }
+}
 
 ///////////////////////////////
 // player functions
@@ -207,7 +294,8 @@ void round_turn() {
 ///////////////////////////////
 int main(void) {
     uart_init();
-
+//    setup_buttons();
+//    WDT_Init();
     sei();
 
     while (1) {
