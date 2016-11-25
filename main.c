@@ -11,10 +11,13 @@
 ///////////////////////////////
 // defines
 ///////////////////////////////
+#define DBG 				0
+
 #define MAX_NUMBER_NOTES 	100
 #define MIN_NUM_PLAYERS		2
 #define MAX_NUM_PLAYERS		9
-#define DBG 				0
+#define BTN_PRESS_TIMEOUT	5		// in seconds
+#define DEBOUNCE_TIME 		150 	// debounce time in ms
 
 
 ///////////////////////////////
@@ -33,7 +36,11 @@ int cur_player;
 int winner;
 int cur_round;
 int cur_number_of_notes;
-int timeout;
+volatile int timeout;
+volatile char note_pressed;
+volatile unsigned long milliseconds;			// milliseconds since start
+volatile unsigned long btn1_last_pressed;		// last time button 1 was pressed
+volatile unsigned long btn2_last_pressed;		// last time button 2 was pressed
 
 int players[MAX_NUM_PLAYERS];
 char notes_sequence[MAX_NUMBER_NOTES];
@@ -70,22 +77,40 @@ void setup_buttons() {
     sei();
 }
 
-ISR (INT0_vect)
-{
-    printf("Interruption Button 1\n");
+void enable_buttons() {
+	EIMSK |= (1 << INT1) | (1 << INT0); 		// Allow INT0/INT1 interrupts
+	
+	btn1_last_pressed = 0;
+	btn2_last_pressed = 0;
 }
 
-ISR (INT1_vect)
-{
-    printf("Interruption Button 2\n");
+void disable_buttons() {
+	EIMSK &= ~(1 << INT1);
+	EIMSK &= ~(1 << INT0);
 }
+
+ISR(INT0_vect) {
+	if (milliseconds - btn1_last_pressed > DEBOUNCE_TIME) {
+		btn1_last_pressed = milliseconds;
+		printf("F");
+		note_pressed = 'F';
+	}
+}
+
+ISR(INT1_vect) {
+	if (milliseconds - btn2_last_pressed > DEBOUNCE_TIME) {
+		btn2_last_pressed = milliseconds;
+		printf("C");
+		note_pressed = 'C';
+	}
+}
+
 
 ///////////////////////////////
 // Watchdog setup
 // Watchdog will be used to count time to user press button (5s).
 // As we don't have a prescaler, we count 5 watchdog interruptions of 1s.
 ///////////////////////////////
-
 //initialize watchdog
 void WDT_Init(void) {
     //disable interrupts
@@ -114,6 +139,33 @@ ISR(WDT_vect) {
         printf("Watch Dog Timer - time %d \n", watchdog_counter);
 	wdt_reset();
     }
+}
+
+///////////////////////////////
+// timer0 functions
+///////////////////////////////
+void config_timer0() {
+	// cpu freq.: 16MHz - 16.000.000
+  	// prescaler 64
+  	// 16MHz / 64 = 250.000 cycles / sec.
+  	// 1 cycle = 4us (4 micro sec.)
+  	// config timer to count from 0 to 250 (1ms)
+	TIMSK0 = (1 << TOIE0); // Enable the interrupt on overflow for Timer0
+	TCCR0B = (1<<CS01) | (1<<CS00); // Set timer0 with /64 prescaler (TCCR0B = 0b00000011)
+	TCNT0 = 0x00; // Set timer0 counter initial value to 0
+	OCR0A = 0xFA; // Output Compare = 250
+
+	milliseconds = 0;
+}
+
+// timer0 interrupt
+// configured to count 1ms intervals
+ISR(TIMER0_OVF_vect) {
+	// Output Compare = 250
+	OCR0A = 0xFA;
+	
+	// increment millis
+	milliseconds++;
 }
 
 ///////////////////////////////
@@ -174,12 +226,14 @@ void clear_notes_sequence() {
 
 char get_next_note() {
 	// TODO: replace by button inputs
-	char note = 'a';
-	while (note != 'C' && note != 'F') {
-		scanf("%c", &note);	
-	}
+	note_pressed = ' ';
+	// char note = 'a';
+	// while (note != 'C' && note != 'F') {
+	// 	scanf("%c", &note);	
+	// }
+	while (note_pressed != 'C' && note_pressed != 'F') { }
 
-	return note;
+	return note_pressed;
 }
 
 void print_notes_sequence() {
@@ -232,8 +286,10 @@ void round_start() {
 
 void round_turn() {
 
+	enable_buttons();
 	while (cur_player >= 0) {
 		printf("Player %d\n", (cur_player+1));
+
 
 		char note;
 		if (cur_number_of_notes == 0) {
@@ -286,6 +342,7 @@ void round_turn() {
 		}
 	}
 
+	disable_buttons();
 	inc_round();
 }
 
@@ -294,8 +351,15 @@ void round_turn() {
 ///////////////////////////////
 int main(void) {
     uart_init();
-//    setup_buttons();
+
+
+    setup_buttons();
+    disable_buttons();
+
+	config_timer0();
+
 //    WDT_Init();
+
     sei();
 
     while (1) {
