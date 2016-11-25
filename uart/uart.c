@@ -42,8 +42,7 @@ void uart_init(void) {
 
 void wait_tx_ready() {
 	while((UCSR0A & (1<<UDRE0)) == 0 ) {} // wait until the port is ready to be written to
-	// while((UCSR0A & (1 << TXC0)) == 0 ) {} // wait until the port is ready to be written to
-
+	// while ((UCSR0A & (1 << TXC0)) == 0 ){}
 	// UCSR0A |= (1 << TXC0);
 }
 

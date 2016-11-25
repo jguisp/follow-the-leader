@@ -11,7 +11,11 @@ AVRDUDE=$(ARDUINO_ROOT)/bin/avrdude
 AVRDUDE_CONF=$(ARDUINO_ROOT)/etc/avrdude.conf
 
 DEPS=main.h circular_buffer/circular_buffer.c uart/uart.c
+# DEPS=simple_usart/uart.o
+
 HEADER_SEARCH_PATH=./
+PRINTF_EXT=-Wl,-u,vfprintf -lprintf_flt -lm
+SCANF_EXT=-Wl,-u,vfscanf -lscanf_flt -lm
 
 .PHONY: compile upload clean
 
@@ -21,7 +25,7 @@ compile: $(SKETCH_NAME).hex
 	$(OBJCOPY) -j .text -j .data -O ihex $< $@
 
 %.x: $(DEPS) %.c
-	$(GCC) -Wall -I $(HEADER_SEARCH_PATH) -Os -mmcu=atmega328 -Wl,-u,vfprintf -lprintf_flt -lm -o $@ $^
+	$(GCC) -Wall -I $(HEADER_SEARCH_PATH) -Os -mmcu=atmega328 $(PRINTF_EXT)  -o $@ $^
 
 upload: $(SKETCH_NAME).hex $(AVRDUDE_CONF) $(DEVICE_PATH)
 	$(AVRDUDE) -C $(AVRDUDE_CONF) -v -patmega328p -carduino -P $(DEVICE_PATH) -b115200 -D -Uflash:w:$<:i

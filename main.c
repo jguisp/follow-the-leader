@@ -2,6 +2,7 @@
 #include <avr/interrupt.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "main.h"
 #include "uart/uart.h"
@@ -9,38 +10,30 @@
 ///////////////////////////////
 // defines
 ///////////////////////////////
-#define MAX_NUMBER_NOTES 100
-#define DBG 0
+#define MAX_NUMBER_NOTES 	100
+#define MIN_NUM_PLAYERS		2
+#define MAX_NUM_PLAYERS		9
+#define DBG 				0
 
 ///////////////////////////////
 // variables
 ///////////////////////////////
-unsigned char num_players;
-unsigned char num_active_players;
-unsigned char cur_player;
-unsigned char* players = NULL;
+int num_players;
+int num_active_players;
+int cur_player;
+int winner;
+int cur_round;
+int cur_number_of_notes;
+int timeout;
 
-unsigned int cur_round;
-
-unsigned char* notes_sequence = NULL;
-unsigned char cur_number_of_notes;
-
-unsigned char timeout = 0;
+int players[MAX_NUM_PLAYERS];
+char notes_sequence[MAX_NUMBER_NOTES];
 
 ///////////////////////////////
 // player functions
 ///////////////////////////////
-void read_num_players() {
-	scanf("%c", &num_players);
-	printf("%c players\n", num_players);
-}
-
-unsigned char get_num_active_players() {
-	return num_active_players;
-}
-
-unsigned char get_next_active_player() {
-	unsigned char next;
+int get_next_active_player() {
+	int next;
 
 	for (next=cur_player+1; next < num_players && !players[next]; next++) {}
 
@@ -50,23 +43,18 @@ unsigned char get_next_active_player() {
 	return next;
 }
 
-unsigned char get_first_active_player() {
-	unsigned char first_active = 0;
+int get_first_active_player() {
+	char first_active = 0;
 
-	unsigned char* p = players;
-	while (!(*p) && p++) {
-		first_active++;
+	int i;
+	for (i=0; i<num_players; i++) {
+		if (players[i]) {
+			first_active = i;
+			break;
+		}
 	}
 
 	return first_active;
-}
-
-void init_players_list(int size) {
-	if (DBG) {
-		printf("init players list");	
-	}
-
-	players = (unsigned char*) malloc(sizeof(unsigned char) * size);
 }
 
 // set all players as active
@@ -76,20 +64,8 @@ void activate_players() {
 	}
 
 	num_active_players = num_players;
-	cur_player = 0;
 
-	// memset(players, 1, sizeof(unsigned char) * num_players);
-	int i;
-	for (i=0; i<num_players; i++) {
-		players[i] = 1;
-	}
-}
-
-void destroy_players_list() {
-	if (players) {
-		free(players);
-		players = NULL;
-	}
+	memset(players, 1, sizeof(int) * num_players);
 }
 
 void eliminate_player(int player_number) {
@@ -106,35 +82,15 @@ void clear_notes_sequence() {
 	}
 	
 	cur_number_of_notes = 0;
-	// memset(notes_sequence, ' ', sizeof(unsigned char) * MAX_NUMBER_NOTES);
-	int i;
-	for (i=0; i<num_players; i++) {
-		notes_sequence[i] = ' ';
-	}
+	memset(notes_sequence, ' ', sizeof(char) * MAX_NUMBER_NOTES);
 }
 
-void init_notes_sequence() {
-	if (!notes_sequence) {
-		if (DBG) {
-			printf("init notes sequence");
-		}
-
-		notes_sequence = (unsigned char*) malloc(sizeof(unsigned char) * MAX_NUMBER_NOTES);
-	} else {
-		clear_notes_sequence();
+char get_next_note() {
+	// TODO: replace by button inputs
+	char note = 'a';
+	while (note != 'C' && note != 'F') {
+		scanf("%c", &note);	
 	}
-}
-
-void destroy_notes_sequence() {
-	if (notes_sequence) {
-		free(notes_sequence);
-		notes_sequence = NULL;
-	}
-}
-
-unsigned char get_next_note() {
-	volatile char note;
-	scanf("%c", &note);
 
 	return note;
 }
@@ -144,7 +100,7 @@ void print_notes_sequence() {
 	
 	int i;
 	for(i=0; i<cur_number_of_notes; i++) {
-		printf("%c - ", notes_sequence[i]);
+		printf("%c", notes_sequence[i]);
 	}
 	
 	printf("\n");
@@ -164,22 +120,25 @@ void reset() {
 	printf("Welcome to the follow the leader game! Please enter the number of players: [2-9]\n");
 }
 
-void state_num_players() {
-	read_num_players();
-	init_players_list(num_players);
+void read_num_players() {
+	num_players = 0;
+
+	while (num_players < MIN_NUM_PLAYERS || num_players > MAX_NUM_PLAYERS) {
+		scanf("%d", &num_players);	
+	}
+	printf("%d players\n", num_players);
 }
 
 void round_reset() {
 	cur_round = 1;
+	winner = 0;
 
-	init_notes_sequence();
+	clear_notes_sequence();
 	activate_players();
-
-	round_start();	
 }
 
 void round_start() {
-	printf("Round %d\n", cur_round);
+	printf("\nRound %d\n", cur_round);
 
 	cur_player = get_first_active_player();
 }
@@ -187,53 +146,56 @@ void round_start() {
 void round_turn() {
 
 	while (cur_player >= 0) {
-		printf("Player %d \n", (cur_player+1));
+		printf("Player %d\n", (cur_player+1));
 
-		// start timer to check timeout
-		
-		volatile unsigned char note;
+		char note;
 		if (cur_number_of_notes == 0) {
 			note = get_next_note();
+			printf("%c\n", note);
 			notes_sequence[cur_number_of_notes++] = note;
-
 		} else {
 			// wait for the sequence of notes or timeout
-			unsigned char notes_pressed = 0;
-			while (notes_pressed < cur_number_of_notes+1) {
+			char num_notes_pressed = 0;
+			int eliminated=0;
+			while (num_notes_pressed < cur_number_of_notes) {
+				// start timer to check timeout
 				note = get_next_note();
-				printf("%c - ", note);
+				printf("%c", note);
 
-				if (notes_pressed == cur_number_of_notes) {
-					notes_sequence[cur_number_of_notes++] = note;
-					break;
-				}
-
-				if (notes_sequence[notes_pressed++] != note) {
-					printf("Incorrect sequence! You have been eliminated!\n");
+				if (note != notes_sequence[num_notes_pressed++]) {
+					printf("\nIncorrect sequence! You have been eliminated!\n");
 					eliminate_player(cur_player);
-					
-				 	break;
+					eliminated=1;
+			 		break;	
 				}
-				// more than 5 seconds between notes
-				// if (timeout) {
-				// 	printf("Time expired. You have been eliminated!");
-
-				// 	eliminate_player(cur_player);
-
-				// 	if (get_num_active_players() == 1) {
-				// 		printf("Player %c won", get_next_active_player());
-				// 	}
-				// }
 			}
-		}
-	
-		printf("Active Players %d \n", get_num_active_players());
 
-		if (get_num_active_players() == 1) {
-			printf("Player %c won", get_next_active_player());
+			if (!eliminated) {
+				note = get_next_note();
+				printf("%c\n", note);
+				notes_sequence[cur_number_of_notes++] = note;
+			}
+
+			// more than 5 seconds between notes
+			// if (timeout) {
+			// 	printf("Time expired. You have been eliminated!");
+
+			// 	eliminate_player(cur_player);
+
+			// 	if (get_num_active_players() == 1) {
+			// 		printf("Player %c won", get_next_active_player());
+			// 	}
+			// }
+		}
+
+		
+		if (num_active_players == 1) {
+			winner = get_first_active_player() + 1;
+			printf("Player %d won\n", winner);
+			cur_player = -1;
 		} else {
-			print_notes_sequence();
-			cur_player = get_next_active_player();
+			// print_notes_sequence();
+			cur_player = get_next_active_player();;
 		}
 	}
 
@@ -248,14 +210,15 @@ int main(void) {
 
     sei();
 
-	reset();
-	state_num_players();
-	round_reset();
+    while (1) {
+    	reset();
+		read_num_players();
+		round_reset();
 
-    for ( ; ; ) {
-    	round_start();
-
-    	round_turn();
+	    do {
+	    	round_start();
+	    	round_turn();
+		} while (!winner);
 	}
 
     return 0;
