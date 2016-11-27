@@ -18,7 +18,7 @@
 #define MIN_NUM_PLAYERS		2
 #define MAX_NUM_PLAYERS		9
 #define BTN_PRESS_TIMEOUT	5		// in seconds
-#define DEBOUNCE_TIME 		150 	// debounce time in ms
+#define DEBOUNCE_TIME 		250 	// debounce time in ms
 
 
 ///////////////////////////////
@@ -91,19 +91,21 @@ void disable_buttons() {
 }
 
 ISR(INT0_vect) {
-	if (milliseconds - btn1_last_pressed > DEBOUNCE_TIME) {
-		btn1_last_pressed = milliseconds;
-		printf("F");
-		note_pressed = 'F';
-	}
+    if (milliseconds - btn1_last_pressed > DEBOUNCE_TIME) {
+        btn1_last_pressed = milliseconds;
+        printf("F");
+        note_pressed = 'F';
+        play_note(f4);
+    }
 }
 
 ISR(INT1_vect) {
-	if (milliseconds - btn2_last_pressed > DEBOUNCE_TIME) {
-		btn2_last_pressed = milliseconds;
-		printf("C");
-		note_pressed = 'C';
-	}
+    if (milliseconds - btn2_last_pressed > DEBOUNCE_TIME) {
+        btn2_last_pressed = milliseconds;
+        printf("C");
+        note_pressed = 'C';
+        play_note(c4);
+    }
 }
 
 
@@ -292,7 +294,7 @@ void round_turn() {
         char note;
         if (cur_number_of_notes == 0) {
             note = get_next_note();
-            printf("%c\n", note);
+//            printf("%c\n", note);
             notes_sequence[cur_number_of_notes++] = note;
         } else {
             // wait for the sequence of notes or timeout
@@ -349,11 +351,13 @@ void round_turn() {
 int main(void) {
     uart_init();
 
-
     setup_buttons();
-    disable_buttons();
+    enable_buttons();
 
     config_timer0();
+
+    // IMPORTANT: notes uses TIMER2 to control how long note will ve played.
+    init_notes();
 
 //    WDT_Init();
 

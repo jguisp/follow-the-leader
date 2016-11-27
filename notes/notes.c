@@ -1,4 +1,3 @@
-
 #define F_CPU 16000000UL 
 #include <avr/io.h>
 #include <stdio.h>
@@ -18,30 +17,23 @@ static unsigned int duration=0;
 unsigned char play_tune,*tune_array;
 unsigned int tempo;
 
+// notes uses timer2 to control how much time the note will be played.
 ISR(TIMER2_COMPA_vect)
 {
     millis++;
-    printf("timer0 %d\n", millis);
+    if (millis == 1) {
+        duration = tempo * 8;       // duration of note
+        OCR2A = note;               // set note
+        DDRB |= 1;                  // turn on buzzer
+        PORTB |= 1;
+        playing = 1;
+        printf("timer2 play %d \n", note);
+    } else if (millis == 160) {
+        DDRB &=~(1);                // turn off buzzer
+        TIMSK2 &= ~(1<<OCIE2A);
+        playing = 0;
+    }
 
-    if(duration>0)
-        duration--;
-//    else {
-        if (millis == 1) {
-            duration = tempo * 8;       // duration of note
-            OCR2A = note;               // set note
-            DDRB |= 1;                  // turn on buzzer
-            PORTB |= 1;
-            playing = 1;
-            printf("timer0 play\n");
-        } else if (millis == 100) {
-            DDRB &=~(1);                // turn off buzzer
-            printf("timer0 100 \n");
-        } else if (millis == 130) {
-            TIMSK0 &= ~(1<<OCIE2A);
-            playing = 0;
-            printf("timer0 120 \n");
-        }
-//    }
 }
 
 int is_playing() {
@@ -65,7 +57,6 @@ void init_timer2() {
 }
 
 void play_note(int note_frequency) {
-    printf("play_note %d\n", note_frequency);
     note = note_frequency;
     duration = 0;
     init_timer2();
@@ -76,24 +67,3 @@ void init_notes() {
     tempo=(210>>1);
     sei();
 }
-
-/*int main(void)
-{
-    // Initialize UART
-    uart_init();
-    stdout = &uart_output;
-    stdin  = &uart_input;
-
-    init_notes();
-
-    while (1) {
-        printf("while\n");
-        if (is_playing() == 0) {
-            printf("is playing = 0\n");
-            play_note(f4);
-        }
-    }
-
-    DDRB &=~(1); 			//turn off buzzer and
-    return 0;				//exit
-}*/
