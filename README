@@ -1,0 +1,26 @@
+CARLOS EDUARDO FERNANDES
+JOSE GUILHERME SIMAO PRADO
+
+
+Instrucoes de instalacao no Linux / MacOS
+=========================================
+
+1) Configrar variaveis de ambiente:
+	$ export ARDUINO_ROOT=<AVR_ROOT_PATH>
+	$ export ARDUINO_ROOT=<SERIAL_PORT>
+	
+	Exemplo MacOS:
+  		$ export ARDUINO_ROOT=~/Learning/iot/arduino/Arduino.app/Contents/Java/hardware/tools/avr
+  		$ export DEVICE_PATH=/dev/cu.usbmodem1411
+
+2) Compilar / Limpar / Instalar:
+  	- no diretorio coursework-2 rode o comando:
+    	$ make <compile|clean|upload>
+
+    	onde:
+    		- compile: gera arquivo .hex
+    		- clean: limpa arquivos .x e .hex
+    		- upload: gera arquivo .hex e instalar no arduino
+
+    Exemplo:
+    	$ make upload
