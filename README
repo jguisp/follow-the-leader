@@ -7,7 +7,7 @@ Instrucoes de instalacao no Linux / MacOS
 
 1) Configrar variaveis de ambiente:
 	$ export ARDUINO_ROOT=<AVR_ROOT_PATH>
-	$ export ARDUINO_ROOT=<SERIAL_PORT>
+	$ export DEVICE_PATH=<SERIAL_PORT>
 	
 	Exemplo MacOS:
   		$ export ARDUINO_ROOT=~/Learning/iot/arduino/Arduino.app/Contents/Java/hardware/tools/avr
