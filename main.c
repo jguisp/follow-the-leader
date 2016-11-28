@@ -17,8 +17,8 @@
 #define MAX_NUMBER_NOTES 	100
 #define MIN_NUM_PLAYERS		2
 #define MAX_NUM_PLAYERS		9
-#define BTN_PRESS_TIMEOUT	5		// in seconds
-#define DEBOUNCE_TIME 		250 	// debounce time in ms
+#define BTN_PRESS_TIMEOUT	5 * 1000	// in ms
+#define DEBOUNCE_TIME 		250 		// debounce time in ms
 
 
 ///////////////////////////////
@@ -37,7 +37,7 @@ int cur_player;
 int winner;
 int cur_round;
 int cur_number_of_notes;
-volatile int timeout;
+volatile int time_between_notes;
 volatile char note_pressed;
 volatile unsigned long milliseconds;			// milliseconds since start
 volatile unsigned long btn1_last_pressed;		// last time button 1 was pressed
@@ -93,7 +93,7 @@ void disable_buttons() {
 ISR(INT0_vect) {
     if (milliseconds - btn1_last_pressed > DEBOUNCE_TIME) {
         btn1_last_pressed = milliseconds;
-        printf("F");
+        // printf("F");
         note_pressed = 'F';
         play_note(f4);
     }
@@ -102,7 +102,7 @@ ISR(INT0_vect) {
 ISR(INT1_vect) {
     if (milliseconds - btn2_last_pressed > DEBOUNCE_TIME) {
         btn2_last_pressed = milliseconds;
-        printf("C");
+        // printf("C");
         note_pressed = 'C';
         play_note(c4);
     }
@@ -127,21 +127,29 @@ void WDT_Init(void) {
 
     // Set Watchdog settings: prescaler 1s and no reset
     WDTCSR = (1<<WDIE) | (0<<WDP3) | (1<<WDP2) | (1<<WDP1) | (0<<WDP0);
+
+    watchdog_counter = 0;
+}
+
+void reset_watchdog_counter() {
+	watchdog_counter = 0;
 }
 
 //Watchdog timeout ISR
 ISR(WDT_vect) {
-    printf("Watch Dog Timer\n");
-    if (watchdog_counter == 4) {
-        // current player lost
-        watchdog_counter = 0;
-        wdt_disable();
-        printf("Watch Dog Timer - TIMEOUT\n");
-    } else {
-        watchdog_counter++;
-        printf("Watch Dog Timer - time %d \n", watchdog_counter);
-	wdt_reset();
-    }
+	watchdog_counter++;
+
+  //   printf("Watch Dog Timer\n");
+  //   if (watchdog_counter == 4) {
+  //       // current player lost
+  //       // watchdog_counter = 0;
+  //       wdt_disable();
+  //       printf("Watch Dog Timer - TIMEOUT\n");
+  //   } else {
+        // watchdog_counter++;
+  //       printf("Watch Dog Timer - time %d \n", watchdog_counter);
+		// wdt_reset();
+  //   }
 }
 
 ///////////////////////////////
@@ -159,6 +167,7 @@ void config_timer0() {
 	OCR0A = 0xFA; // Output Compare = 250
 
 	milliseconds = 0;
+    time_between_notes = 0;
 }
 
 // timer0 interrupt
@@ -169,6 +178,7 @@ ISR(TIMER0_OVF_vect) {
 	
 	// increment millis
 	milliseconds++;
+    time_between_notes++;
 }
 
 ///////////////////////////////
@@ -213,6 +223,8 @@ void activate_players() {
 void eliminate_player(int player_number) {
 	players[player_number] = 0;
 	num_active_players--;
+
+	play_note(fx4);
 }
 
 ///////////////////////////////
@@ -228,26 +240,37 @@ void clear_notes_sequence() {
 }
 
 char get_next_note() {
-	// TODO: replace by button inputs
 	note_pressed = ' ';
-	// char note = 'a';
-	// while (note != 'C' && note != 'F') {
-	// 	scanf("%c", &note);	
-	// }
-	while (note_pressed != 'C' && note_pressed != 'F') { }
+	while (note_pressed != 'C' && note_pressed != 'F' && time_between_notes < BTN_PRESS_TIMEOUT) { }
 
 	return note_pressed;
 }
 
-void print_notes_sequence() {
-	printf("\n");
-	
-	int i;
-	for(i=0; i<cur_number_of_notes; i++) {
-		printf("%c", notes_sequence[i]);
+int timeout() {
+	// more than 5 seconds ellapsed since last note
+	if (time_between_notes >= BTN_PRESS_TIMEOUT) {
+		return 1;
 	}
-	
-	printf("\n");
+
+	return 0;
+}
+
+/**
+ * Check if note pressed is already in the notes sequence array.
+ * If note is not in present, eliminate current player and return 0.
+ * If note is present, return 1.
+ * 
+ * The number of notes pressed will be incremented.
+ **/
+int is_note_in_sequence(char note, int num_notes_pressed) {
+	if (note != notes_sequence[num_notes_pressed]) {
+		printf("\nIncorrect sequence! You have been eliminated!\n");
+		eliminate_player(cur_player);
+
+		return 0;
+	}
+
+	return 1;
 }
 
 ///////////////////////////////
@@ -285,61 +308,85 @@ void round_start() {
     cur_player = get_first_active_player();
 }
 
+
 void round_turn() {
 
     enable_buttons();
+
     while (cur_player >= 0) {
         printf("Player %d\n", (cur_player+1));
+        time_between_notes = 0;
 
         char note;
+   
         if (cur_number_of_notes == 0) {
             note = get_next_note();
-//            printf("%c\n", note);
-            notes_sequence[cur_number_of_notes++] = note;
-        } else {
-            // wait for the sequence of notes or timeout
-            char num_notes_pressed = 0;
-            int eliminated=0;
-            while (num_notes_pressed < cur_number_of_notes) {
-                // start timer to check timeout
-                note = get_next_note();
-                printf("%c", note);
 
-                if (note != notes_sequence[num_notes_pressed++]) {
-                    printf("\nIncorrect sequence! You have been eliminated!\n");
-                    eliminate_player(cur_player);
-                    eliminated=1;
-                    break;	
-                }
+            // check timeout
+            if (timeout()) {
+            	printf("Time expired. You have been eliminated!\n");
+				eliminate_player(cur_player);
+            } else {
+	            printf("%c\n", note);
+	            notes_sequence[cur_number_of_notes++] = note;	
+	            time_between_notes = 0;
             }
 
-            if (!eliminated) {
-                note = get_next_note();
-                printf("%c\n", note);
-                notes_sequence[cur_number_of_notes++] = note;
-            }
-
-            // more than 5 seconds between notes
-            // if (timeout) {
-            // 	printf("Time expired. You have been eliminated!");
-
-            // 	eliminate_player(cur_player);
-
-            // 	if (get_num_active_players() == 1) {
-            // 		printf("Player %c won", get_next_active_player());
-            // 	}
-            // }
-        }
-
-        if (num_active_players == 1) {
-            winner = get_first_active_player() + 1;
-            printf("Player %d won\n", winner);
-            cur_player = -1;
         } else {
-            // print_notes_sequence();
-            cur_player = get_next_active_player();;
-        }
-    }
+			int num_notes_pressed = 0;
+			while (num_notes_pressed < cur_number_of_notes) {
+				// start timer to check timeout
+				note = get_next_note();
+
+				if (timeout()) {
+					printf("Time expired. You have been eliminated!\n");
+					eliminate_player(cur_player);
+					
+					break;
+				}
+				time_between_notes = 0;
+
+				// When there's more than one note in the sequence and the 
+            	// current note pressed is not in the sequence, eliminate player.
+	            if (note != notes_sequence[num_notes_pressed]) {
+	            	printf("\nIncorrect sequence! You have been eliminated!\n");
+					
+					eliminate_player(cur_player);
+			
+	 				break;	
+				}
+				num_notes_pressed++;
+
+				printf("%c", note);
+			}
+
+			// If there's more than one note in sequence and
+			// the current player was not eliminated, get one more note
+			if (players[cur_player]) {
+				note = get_next_note();
+
+				if (timeout()) {
+					printf("Time expired. You have been eliminated!\n");
+					eliminate_player(cur_player);
+				} else {
+					printf("%c\n", note);
+					notes_sequence[cur_number_of_notes++] = note;
+					time_between_notes = 0;
+				}
+			}
+		}
+
+		if (num_active_players == 1) {
+			// set global variable winner to indicate
+			// that the game must be reset
+			winner = get_first_active_player() + 1;
+			printf("Player %d won\n", winner);
+
+			cur_player = -1;
+		} else {
+			cur_player = get_next_active_player();
+		}
+	}
 
     disable_buttons();
     inc_round();
@@ -359,7 +406,7 @@ int main(void) {
     // IMPORTANT: notes uses TIMER2 to control how long note will ve played.
     init_notes();
 
-//    WDT_Init();
+  	// WDT_Init();
 
     sei();
 

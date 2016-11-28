@@ -1,8 +1,8 @@
 # environment variables
 #ARDUINO_ROOT=~/Learning/iot/arduino/Arduino.app/Contents/Java/hardware/tools/avr
-ARDUINO_ROOT=/Carlos/IOT/arduino-1.6.12/hardware/tools/avr
+# ARDUINO_ROOT=/Carlos/IOT/arduino-1.6.12/hardware/tools/avr
 #DEVICE_PATH=/dev/cu.usbmodem1411
-DEVICE_PATH=/dev/ttyACM0
+# DEVICE_PATH=/dev/ttyACM0
 
 SKETCH_NAME=main
 

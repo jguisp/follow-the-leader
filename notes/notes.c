@@ -27,7 +27,7 @@ ISR(TIMER2_COMPA_vect)
         DDRB |= 1;                  // turn on buzzer
         PORTB |= 1;
         playing = 1;
-        printf("timer2 play %d \n", note);
+        // printf("timer2 play %d \n", note);
     } else if (millis == 160) {
         DDRB &=~(1);                // turn off buzzer
         TIMSK2 &= ~(1<<OCIE2A);
@@ -65,5 +65,5 @@ void play_note(int note_frequency) {
 void init_notes() {
     init_buzzer();
     tempo=(210>>1);
-    sei();
+    // sei();
 }
