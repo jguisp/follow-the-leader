@@ -95,7 +95,7 @@ ISR(INT0_vect) {
         btn1_last_pressed = milliseconds;
         // printf("F");
         note_pressed = 'F';
-        play_note(f4);
+        play_note(f6);
     }
 }
 
@@ -104,7 +104,7 @@ ISR(INT1_vect) {
         btn2_last_pressed = milliseconds;
         // printf("C");
         note_pressed = 'C';
-        play_note(c4);
+        play_note(c5);
     }
 }
 

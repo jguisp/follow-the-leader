@@ -5,65 +5,61 @@
 #include <util/delay.h>
 #include "uart/uart.h"
 
-#define c4  239
-#define f4  179
-#define fx4 169
-
-volatile int millis = 0;
-volatile char playing = 0;
-volatile unsigned char note;
-static unsigned int duration=0;
-
-unsigned char play_tune,*tune_array;
 unsigned int tempo;
+volatile char note;
+volatile unsigned char playing = 0;
+volatile int duration=0;
 
-// notes uses timer2 to control how much time the note will be played.
-ISR(TIMER2_COMPA_vect)
-{
-    millis++;
-    if (millis == 1) {
-        duration = tempo * 8;       // duration of note
-        OCR2A = note;               // set note
-        DDRB |= 1;                  // turn on buzzer
-        PORTB |= 1;
-        playing = 1;
-        // printf("timer2 play %d \n", note);
-    } else if (millis == 160) {
-        DDRB &=~(1);                // turn off buzzer
-        TIMSK2 &= ~(1<<OCIE2A);
-        playing = 0;
-    }
-
-}
-
-int is_playing() {
-   return playing;
-}
-
-void init_buzzer(void)
-{
-    DDRB |= 1;				//set data direction reg bit 0 to output
-    PORTB &=~(1);			//set buzzer output low
-}
-
-void init_timer2() {
-    TCCR2A = 0; //tmr0 Clear Timer on Compare Match
-    TCCR2B = _BV(WGM01)|_BV(CS01)|_BV(CS00);  //CTC mode with CPU clock/64 = 125 kHz
-    OCR2A = 125;  //set for 1 ms interrupt
-    TCNT2=0;
-    millis = 0;
-    TIMSK2 = (1<<OCIE2A);
+void play_note(int frequency_note) {
+    note = frequency_note;
+    TIMSK1 |= (1 << OCIE1A);
     sei();
 }
 
-void play_note(int note_frequency) {
-    note = note_frequency;
-    duration = 0;
-    init_timer2();
+ISR(TIMER2_COMPA_vect) {
+    PORTB ^= 1;
 }
 
-void init_notes() {
-    init_buzzer();
-    tempo=(210>>1);
-    // sei();
+ISR(TIMER1_COMPA_vect)
+{
+
+    if(duration>0) {
+        duration--;
+        if (duration == 0) {
+            playing = 0;
+            DDRB &=~(1);
+            TIMSK1 &= ~(1 << OCIE1A);
+        }
+    } else {
+        if (note>0) {
+            duration = tempo;
+            OCR2A = note;
+            DDRB |= 1;
+            playing = 1;
+        }
+    }
+}
+
+      
+void init_notes(void)
+{
+    DDRB |= 1;				//set data direction reg bit 0 to output
+    PORTB &=~(1);			//set buzzer output low
+
+    TCCR1A = 0;
+    TCCR1B |= (1<<WGM01) | (1<<CS01) | (1<<CS00) ;
+    OCR1A = 125;
+    TCNT1=0;
+    TIMSK1 |= (1 << OCIE1A);
+
+    TCCR2A= (1<<WGM21);
+    TCCR2B=(1<<CS22);
+    TCNT2=0;
+    OCR2A=255;
+    OCR2B=255;
+    TIMSK2= (1<<OCIE2A);
+
+    DDRB &= ~(1);
+    tempo = 2;
+    sei();
 }
